@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Grammar Voice Evaluator</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --primary: #4361ee;
+        --success: #4cc9f0;
+        --warning: #f8961e;
+        --danger: #f94144;
+        --light: #f8f9fa;
+        --dark: #212529;
+      }
+
+      body {
+        font-family: "Poppins", sans-serif;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        min-height: 100vh;
+        margin: 0;
+        padding: 2rem;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+      }
+
+      h1 {
+        color: var(--primary);
+        text-align: center;
+        margin-bottom: 2rem;
+      }
+
+      .mic-btn {
+        display: block;
+        width: 100%;
+        padding: 1rem;
+        border: none;
+        border-radius: 8px;
+        background: var(--primary);
+        color: white;
+        font-size: 1.2rem;
+        cursor: pointer;
+        transition: all 0.3s;
+        margin-bottom: 2rem;
+      }
+
+      .mic-btn:hover {
+        background: #3a56d4;
+        transform: translateY(-2px);
+      }
+
+      .mic-btn:active {
+        transform: translateY(0);
+      }
+
+      .mic-btn.recording {
+        background: var(--danger);
+        animation: pulse 1.5s infinite;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+        }
+        70% {
+          box-shadow: 0 0 0 15px rgba(244, 67, 54, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
+        }
+      }
+
+      .result-card {
+        background: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+      }
+
+      .score {
+        font-size: 2.5rem;
+        font-weight: bold;
+        text-align: center;
+        margin: 1rem 0;
+      }
+
+      .score-excellent {
+        color: var(--success);
+      }
+      .score-good {
+        color: var(--warning);
+      }
+      .score-poor {
+        color: var(--danger);
+      }
+
+      .suggestion {
+        background: #f8f9fa;
+        border-left: 4px solid var(--primary);
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0 5px 5px 0;
+      }
+
+      .status {
+        text-align: center;
+        margin: 1rem 0;
+        font-style: italic;
+        color: #6c757d;
+      }
+
+      .timer {
+        text-align: center;
+        font-size: 1.2rem;
+        margin: 1rem 0;
+        color: var(--primary);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎤 Grammar Voice Evaluator</h1>
+
+      <button id="recordBtn" class="mic-btn">Start Recording</button>
+      <div id="timer" class="timer" style="display: none">00:00</div>
+      <div id="status" class="status">Ready to record</div>
+
+      <div id="results" style="display: none">
+        <div class="result-card">
+          <h3>Your Speech:</h3>
+          <div id="userSpeech" class="speech-text"></div>
+        </div>
+
+        <div class="result-card">
+          <h3>Grammar Analysis:</h3>
+          <div id="score" class="score"></div>
+          <div id="suggestions"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const recordBtn = document.getElementById("recordBtn");
+      const statusEl = document.getElementById("status");
+      const timerEl = document.getElementById("timer");
+      const resultsEl = document.getElementById("results");
+      const userSpeechEl = document.getElementById("userSpeech");
+      const scoreEl = document.getElementById("score");
+      const suggestionsEl = document.getElementById("suggestions");
+
+      let startTime;
+      let timerInterval;
+
+      function updateTimer() {
+        const currentTime = Date.now();
+        const elapsedSeconds = Math.floor((currentTime - startTime) / 1000);
+        const minutes = Math.floor(elapsedSeconds / 60)
+          .toString()
+          .padStart(2, "0");
+        const seconds = (elapsedSeconds % 60).toString().padStart(2, "0");
+        timerEl.textContent = `${minutes}:${seconds}`;
+      }
+
+      recordBtn.addEventListener("click", async () => {
+        try {
+          if (recordBtn.classList.contains("recording")) {
+            // Stop recording
+            recordBtn.classList.remove("recording");
+            recordBtn.textContent = "Start Recording";
+            clearInterval(timerInterval);
+            timerEl.style.display = "none";
+            statusEl.textContent = "Processing your speech...";
+
+            const response = await fetch("/stop_recording", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+              // Show results
+              resultsEl.style.display = "block";
+              userSpeechEl.textContent = data.text;
+
+              // Set score with color coding
+              scoreEl.textContent = `${data.score.toFixed(1)}/100`;
+              if (data.score >= 80) {
+                scoreEl.className = "score score-excellent";
+              } else if (data.score >= 60) {
+                scoreEl.className = "score score-good";
+              } else {
+                scoreEl.className = "score score-poor";
+              }
+
+              // Show suggestions
+              suggestionsEl.innerHTML = "";
+              if (data.suggestions.length > 0) {
+                suggestionsEl.innerHTML += `<p>Found ${data.suggestions.length} grammar issues:</p>`;
+                data.suggestions.forEach((suggestion, i) => {
+                  suggestionsEl.innerHTML += `
+                                    <div class="suggestion">
+                                        <strong>${i + 1}. ${
+                    suggestion.message
+                  }</strong>
+                                        <p>Suggestions: ${suggestion.replacements.join(
+                                          ", "
+                                        )}</p>
+                                    </div>
+                                `;
+                });
+              } else {
+                suggestionsEl.innerHTML =
+                  "<p>Excellent! No grammar errors found.</p>";
+              }
+
+              statusEl.textContent = "Analysis complete!";
+            } else {
+              statusEl.textContent = `Error: ${data.error}`;
+            }
+          } else {
+            // Start recording
+            recordBtn.classList.add('recording');
+            recordBtn.textContent = "Stop Recording";
+            resultsEl.style.display = 'none';
+            startTime = Date.now();  // Reset timer
+            timerEl.textContent = "00:00";  // Initialize display
+            timerEl.style.display = "block";
+            timerInterval = setInterval(updateTimer, 200);  // Update more frequently
+            statusEl.textContent = "Recording... Click STOP when finished";
+            
+            await fetch('/start_recording', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+        }
+        } catch (error) {
+          statusEl.textContent = `Error: ${error.message}`;
+          recordBtn.classList.remove("recording");
+          recordBtn.textContent = "Start Recording";
+          clearInterval(timerInterval);
+        }
+      });
+    </script>
+  </body>
+</html>
